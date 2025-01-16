@@ -21,7 +21,7 @@ def simple_processing(data):
     """Apply a simple processing to the dataset."""
     for col in data.select_dtypes(include=["object"]).columns:
         # Incrémenter le compteur de transactions
-        transaction_count += 1
+        transaction_count += len(data[col])
         data[col] = data[col].str.upper()
     return data
 
