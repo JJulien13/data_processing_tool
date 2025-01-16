@@ -1,9 +1,11 @@
 import os
 import time
+import hashlib
 import requests
 import pandas as pd
 from flask import Flask, request, jsonify, send_file, render_template
 from werkzeug.utils import secure_filename
+from threading import Thread
 
 # Flask app setup
 app = Flask(__name__)
@@ -16,13 +18,16 @@ os.makedirs(RESULTS_FOLDER, exist_ok=True)
 start_time = time.time()
 transaction_count = 0
 
+# Variable pour stocker l'empreinte (hash) du fichier téléchargé
+last_file_hash = None
+
 # Utility functions
 def simple_processing(data):
     """Apply a simple processing to the dataset."""
     for col in data.select_dtypes(include=["object"]).columns:
+        data[col] = data[col].str.upper()
         # Incrémenter le compteur de transactions
         transaction_count += len(data[col])
-        data[col] = data[col].str.upper()
     return data
 
 def process_file(filepath):
@@ -49,6 +54,40 @@ def get_tps():
     tps = transaction_count / elapsed_time if elapsed_time > 0 else 0
     return tps
 
+def download_and_check_google_sheet(google_sheet_url):
+    """Télécharger le fichier Google Sheets et vérifier les changements"""
+    global last_file_hash
+    response = requests.get(google_sheet_url)
+    
+    if response.status_code == 200:
+        # Calculer le hash du fichier téléchargé
+        file_hash = hashlib.md5(response.content).hexdigest()
+
+        # Comparer l'empreinte du fichier avec la précédente
+        if file_hash != last_file_hash:
+            # Si le fichier a changé, traiter les données
+            filepath = os.path.join(UPLOAD_FOLDER, "google_sheet.csv")
+            with open(filepath, "wb") as f:
+                f.write(response.content)
+
+            processed_path, selected_path = process_file(filepath)
+            # Mettre à jour l'empreinte du fichier
+            last_file_hash = file_hash
+            return processed_path, selected_path
+        else:
+            print("No changes detected in the Google Sheets file.")
+            return None, None
+    else:
+        print(f"Failed to fetch the CSV from the Google Sheets URL. Status code: {response.status_code}")
+        return None, None
+
+# Fonction pour vérifier le Google Sheet à intervalle régulier
+def check_for_updates(google_sheet_url):
+    """Vérifier périodiquement les mises à jour du fichier Google Sheets"""
+    while True:
+        download_and_check_google_sheet(google_sheet_url)
+        time.sleep(60)  # Attendre 60 secondes avant de vérifier à nouveau
+
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
@@ -70,15 +109,10 @@ def upload_file():
         processed_path, selected_path = process_file(filepath)
     elif google_sheet_url:
         # Télécharger le fichier CSV depuis l'URL Google Sheets
-        response = requests.get(google_sheet_url)
-        if response.status_code == 200:
-            filepath = os.path.join(UPLOAD_FOLDER, "google_sheet.csv")
-            with open(filepath, "wb") as f:
-                f.write(response.content)
+        processed_path, selected_path = download_and_check_google_sheet(google_sheet_url)
 
-            processed_path, selected_path = process_file(filepath)
-        else:
-            return jsonify({"error": "Failed to fetch the CSV from the Google Sheets URL"}), 400
+        if processed_path is None:
+            return jsonify({"error": "No changes detected in the Google Sheets file"}), 400
     else:
         return jsonify({"error": "No file or Google Sheets URL provided"}), 400
 
@@ -109,4 +143,10 @@ def download_file(file_type):
         return jsonify({"error": "File not found"}), 404
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Lancer la vérification périodique dans un thread séparé
+    google_sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSQVbfMxx1JbwNdxjwUmnaxdfkk_sdiWaJ6bhugmPpRvI_dqSoEJK2KcFqYoYAhVbZnJz9qCngZX_fs/pub?output=csv"
+    update_thread = Thread(target=check_for_updates, args=(google_sheet_url,))
+    update_thread.daemon = True
+    update_thread.start()
+
+    app.run(debug=True, host='0.0.0.0', port=5000)
