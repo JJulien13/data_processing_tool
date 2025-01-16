@@ -23,6 +23,7 @@ last_file_hash = None
 
 # Utility functions
 def simple_processing(data):
+    global start_time, transaction_count
     """Apply a simple processing to the dataset."""
     for col in data.select_dtypes(include=["object"]).columns:
         data[col] = data[col].str.upper()
