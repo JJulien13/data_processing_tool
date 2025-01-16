@@ -28,7 +28,7 @@
             flex-direction: column;
             gap: 15px;
         }
-        input[type="file"] {
+        input[type="file"], input[type="text"] {
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -56,34 +56,52 @@
         .links a:hover {
             text-decoration: underline;
         }
-        .tps-container {
+        .tps {
             margin-top: 20px;
-            text-align: center;
-            font-size: 18px;
+            font-size: 1.2em;
             font-weight: bold;
+            color: #333;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Upload CSV File</h1>
+        <h1>Upload CSV File or Google Sheets URL</h1>
         <form id="uploadForm" enctype="multipart/form-data">
-            <input type="file" name="file" required />
+            <!-- Champ pour le fichier CSV -->
+            <input type="file" name="file" id="fileInput" />
+            
+            <!-- Champ pour l'URL du Google Sheets -->
+            <input type="text" name="googleSheetUrl" id="googleSheetUrl" placeholder="Enter Google Sheets URL" />
+            
             <button type="submit">Upload and Process</button>
         </form>
+        
+        <!-- Liens de téléchargement -->
         <div class="links" id="links" style="display:none;">
             <a id="processedLink" href="#" target="_blank">Download Processed Data</a>
             <a id="selectedLink" href="#" target="_blank">Download Selected Data</a>
         </div>
-        <div class="tps-container" id="tpsContainer" style="display:none;">
-            <p>Transactions per Second (TPS): <span id="tpsValue"></span></p>
+        
+        <!-- Affichage du TPS -->
+        <div class="tps" id="tps" style="display:none;">
+            Transactions per Second (TPS): <span id="tpsValue">0.00</span>
         </div>
     </div>
+    
     <script>
+        // Soumettre le formulaire d'upload
         document.getElementById("uploadForm").addEventListener("submit", async (event) => {
             event.preventDefault();
 
             const formData = new FormData(event.target);
+            
+            // Vérifie si un fichier ou une URL Google Sheets a été fourni
+            if (!formData.get('file') && !formData.get('googleSheetUrl')) {
+                alert("Please provide either a CSV file or a Google Sheets URL.");
+                return;
+            }
+
             const response = await fetch("/upload", {
                 method: "POST",
                 body: formData,
@@ -94,10 +112,8 @@
                 document.getElementById("processedLink").href = data.processed_file;
                 document.getElementById("selectedLink").href = data.selected_file;
                 document.getElementById("links").style.display = "block";
-                
-                // Afficher le TPS
+                document.getElementById("tps").style.display = "block";
                 document.getElementById("tpsValue").textContent = data.tps;
-                document.getElementById("tpsContainer").style.display = "block";
             } else {
                 alert("An error occurred while processing the file.");
             }
