@@ -56,6 +56,12 @@
         .links a:hover {
             text-decoration: underline;
         }
+        .tps-container {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -68,6 +74,9 @@
         <div class="links" id="links" style="display:none;">
             <a id="processedLink" href="#" target="_blank">Download Processed Data</a>
             <a id="selectedLink" href="#" target="_blank">Download Selected Data</a>
+        </div>
+        <div class="tps-container" id="tpsContainer" style="display:none;">
+            <p>Transactions per Second (TPS): <span id="tpsValue"></span></p>
         </div>
     </div>
     <script>
@@ -85,6 +94,10 @@
                 document.getElementById("processedLink").href = data.processed_file;
                 document.getElementById("selectedLink").href = data.selected_file;
                 document.getElementById("links").style.display = "block";
+                
+                // Afficher le TPS
+                document.getElementById("tpsValue").textContent = data.tps;
+                document.getElementById("tpsContainer").style.display = "block";
             } else {
                 alert("An error occurred while processing the file.");
             }
