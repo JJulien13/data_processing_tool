@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, send_file, render_template
 import pandas as pd
 import os
 from werkzeug.utils import secure_filename
+import time  # Pour mesurer le temps (utile pour le TPS)
 
 # Flask app setup
 app = Flask(__name__)
@@ -9,6 +10,10 @@ UPLOAD_FOLDER = "uploads"
 RESULTS_FOLDER = "results"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
+
+# Variables pour suivre les transactions
+start_time = time.time()
+transaction_count = 0
 
 # Utility functions
 def simple_processing(data):
@@ -34,6 +39,13 @@ def process_file(filepath):
 
     return processed_path, selected_path
 
+# Fonction pour calculer les TPS
+def get_tps():
+    global start_time, transaction_count
+    elapsed_time = time.time() - start_time  # Temps écoulé depuis le début
+    tps = transaction_count / elapsed_time if elapsed_time > 0 else 0
+    return tps
+
 # Routes
 @app.route("/", methods=["GET"])
 def index():
@@ -41,6 +53,8 @@ def index():
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
+    global start_time, transaction_count
+
     if "file" not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
 
@@ -56,9 +70,16 @@ def upload_file():
         # Process the file
         processed_path, selected_path = process_file(filepath)
 
+       # Incrémenter le compteur de transactions
+        transaction_count += 1
+
+        # Calculer le TPS
+        tps = get_tps()
+
         return jsonify({
             "processed_file": "/download/processed",
-            "selected_file": "/download/selected"
+            "selected_file": "/download/selected",
+            "tps": f"{tps:.2f}"  # Afficher le TPS avec 2 décimales
         })
 
 @app.route("/download/<file_type>", methods=["GET"])
