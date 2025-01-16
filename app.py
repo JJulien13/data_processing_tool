@@ -8,7 +8,7 @@ def process_data():
     if not data:
         return jsonify({"error": "No data provided"}), 400
     
-    # Exemple de traitement simple (vous pouvez adapter)
+    # Simple data transformation example
     processed = {k: v.upper() if isinstance(v, str) else v for k, v in data.items()}
     return jsonify({"processed_data": processed})
 
