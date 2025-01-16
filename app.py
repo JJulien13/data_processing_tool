@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify, send_file, render_template
-import pandas as pd
 import os
+import time
+import requests
+import pandas as pd
+from flask import Flask, request, jsonify, send_file, render_template
 from werkzeug.utils import secure_filename
-import time  # Pour mesurer le temps (utile pour le TPS)
 
 # Flask app setup
 app = Flask(__name__)
@@ -17,7 +18,6 @@ transaction_count = 0
 
 # Utility functions
 def simple_processing(data):
-    global start_time, transaction_count
     """Apply a simple processing to the dataset."""
     for col in data.select_dtypes(include=["object"]).columns:
         # Incrémenter le compteur de transactions
@@ -42,14 +42,13 @@ def process_file(filepath):
 
     return processed_path, selected_path
 
-# Fonction pour calculer les TPS
+# Fonction pour calculer les TPS 
 def get_tps():
     global start_time, transaction_count
     elapsed_time = time.time() - start_time  # Temps écoulé depuis le début
     tps = transaction_count / elapsed_time if elapsed_time > 0 else 0
     return tps
 
-# Routes
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
@@ -58,29 +57,42 @@ def index():
 def upload_file():
     global start_time, transaction_count
 
-    if "file" not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "No file selected"}), 400
+    # Vérifier si un fichier ou une URL a été envoyé
+    file = request.files.get("file")
+    google_sheet_url = request.form.get("googleSheetUrl")
 
     if file:
+        # Traitement de l'upload de fichier
         filename = secure_filename(file.filename)
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
 
-        # Process the file
         processed_path, selected_path = process_file(filepath)
+    elif google_sheet_url:
+        # Télécharger le fichier CSV depuis l'URL Google Sheets
+        response = requests.get(google_sheet_url)
+        if response.status_code == 200:
+            filepath = os.path.join(UPLOAD_FOLDER, "google_sheet.csv")
+            with open(filepath, "wb") as f:
+                f.write(response.content)
 
-        # Calculer le TPS
-        tps = get_tps()
+            processed_path, selected_path = process_file(filepath)
+        else:
+            return jsonify({"error": "Failed to fetch the CSV from the Google Sheets URL"}), 400
+    else:
+        return jsonify({"error": "No file or Google Sheets URL provided"}), 400
 
-        return jsonify({
-            "processed_file": "/download/processed",
-            "selected_file": "/download/selected",
-            "tps": f"{tps:.2f}"  # Afficher le TPS avec 2 décimales
-        })
+    # Incrémenter le compteur de transactions
+    transaction_count += 1
+
+    # Calculer le TPS
+    tps = get_tps()
+
+    return jsonify({
+        "processed_file": "/download/processed",
+        "selected_file": "/download/selected",
+        "tps": f"{tps:.2f}"  # Afficher le TPS avec 2 décimales
+    })
 
 @app.route("/download/<file_type>", methods=["GET"])
 def download_file(file_type):
@@ -96,8 +108,5 @@ def download_file(file_type):
     else:
         return jsonify({"error": "File not found"}), 404
 
-# Run the app
 if __name__ == "__main__":
-    #app.run(debug=True)
-    app.run(debug=True, host="0.0.0.0", port=os.environ.get("PORT", 5000))
-
+    app.run(debug=True)
