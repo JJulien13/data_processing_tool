@@ -17,8 +17,11 @@ transaction_count = 0
 
 # Utility functions
 def simple_processing(data):
+    global start_time, transaction_count
     """Apply a simple processing to the dataset."""
     for col in data.select_dtypes(include=["object"]).columns:
+        # Incrémenter le compteur de transactions
+        transaction_count += 1
         data[col] = data[col].str.upper()
     return data
 
@@ -69,9 +72,6 @@ def upload_file():
 
         # Process the file
         processed_path, selected_path = process_file(filepath)
-
-       # Incrémenter le compteur de transactions
-        transaction_count += 1
 
         # Calculer le TPS
         tps = get_tps()
